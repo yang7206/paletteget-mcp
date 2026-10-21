@@ -81,13 +81,21 @@ async function fetchJson(url) {
   return res.json();
 }
 
-const [zh, en] = await Promise.all([
-  fetchJson(`${BASE}/api/index.json`),
-  fetchJson(`${BASE}/en/api/index.json`),
-]);
+/**
+ * 双语布局两种站是反向的：
+ *   国内站 / 自建默认语言站：中文在根，英文在 /en/
+ *   paletteget.com（海外）：英文在根，中文在 /zh/
+ * 以根端点的实际语言为准探测，不猜路径。
+ */
+const hasCJK = (s) => /[\u3400-\u9fff]/.test(s);
 
-const dataZh = transform(zh);
-const dataEn = transform(en);
+const rootPayload = await fetchJson(`${BASE}/api/index.json`);
+const rootIsZh = hasCJK(JSON.stringify(rootPayload.roleDefinitions || rootPayload));
+const other = await fetchJson(`${BASE}${rootIsZh ? '/en' : '/zh'}/api/index.json`);
+
+const dataZh = transform(rootIsZh ? rootPayload : other);
+const dataEn = transform(rootIsZh ? other : rootPayload);
+console.log(`root ${BASE}/api/index.json → ${rootIsZh ? 'zh' : 'en'}；另一语言走 ${rootIsZh ? '/en' : '/zh'}`);
 
 if (dataZh.total !== dataEn.total) {
   throw new Error(`中英数量不一致：zh=${dataZh.total} en=${dataEn.total}`);
