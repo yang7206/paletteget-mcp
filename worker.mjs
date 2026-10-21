@@ -359,17 +359,31 @@ async function handleMcpPost(request) {
   return json(Array.isArray(body) ? results : results[0]);
 }
 
-const ENDPOINT_INFO = () =>
-  json({
-    name: SERVER_INFO.name,
-    version: SERVER_INFO.version,
-    transport: 'mcp-streamable-http (stateless, JSON responses)',
-    endpoint: '/mcp',
-    tools: TOOLS.map((t) => t.name),
-    palettes: PALETTES.length,
-    site: 'https://paletteget.com',
-    docs: 'https://paletteget.com/docs/',
-  });
+const endpointInfo = () => ({
+  name: SERVER_INFO.name,
+  version: SERVER_INFO.version,
+  transport: 'mcp-streamable-http (stateless, JSON responses)',
+  endpoint: '/mcp',
+  tools: TOOLS.map((t) => t.name),
+  palettes: PALETTES.length,
+  site: 'https://paletteget.com',
+  docs: 'https://paletteget.com/docs/',
+});
+
+const ENDPOINT_INFO = () => json(endpointInfo());
+
+/** Smithery 等目录在扫描失败时的静态兜底（/.well-known/mcp/server-card.json） */
+const SERVER_CARD = () => ({
+  serverInfo: { name: 'PaletteGet', version: SERVER_INFO.version },
+  authentication: { required: false },
+  tools: TOOLS.map((t) => ({
+    name: t.name,
+    description: t.description,
+    inputSchema: t.inputSchema,
+  })),
+  resources: [],
+  prompts: [],
+});
 
 export default {
   async fetch(request) {
@@ -377,11 +391,17 @@ export default {
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
+    if (pathname === '/.well-known/mcp/server-card.json') return json(SERVER_CARD());
+
     if (pathname === '/mcp') {
       if (request.method === 'POST') return handleMcpPost(request);
+      // 无状态服务不提供 SSE 流。GET 返回 200 + 说明，而不是 405：
+      // 目录类聚合器会拿 GET 探活，405 会被判成「服务坏了」。
       if (request.method === 'GET') {
-        // 无状态服务不提供 SSE 流；给客户端一个可读的说明
-        return json(rpcError(null, -32000, 'GET is not supported: this server responds with plain JSON over POST'), 405);
+        return json({
+          ...endpointInfo(),
+          note: 'This server is stateless. POST JSON-RPC to /mcp; it answers with plain JSON and does not open an SSE stream.',
+        });
       }
       return json(rpcError(null, -32000, 'Method not allowed'), 405);
     }
