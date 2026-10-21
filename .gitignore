@@ -1,0 +1,12 @@
+# 依赖
+node_modules/
+
+# 构建期生成的内联数据集（由 build-data.mjs 重建，不入库）
+data/
+
+# Wrangler 本地状态
+.wrangler/
+
+# 本地密钥（Cloudflare API Token 等）
+.dev.vars
+.env
