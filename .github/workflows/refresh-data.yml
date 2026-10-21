@@ -1,0 +1,43 @@
+# Worker 数据每日刷新
+# ------------------------------------------------------------
+# 数据源是线上公开端点（paletteget.com 的 /api/index.json），不依赖私有站点仓库。
+# 时间：01:00 UTC = 09:00 北京时间。站点每日链路 08:00 CST 跑完（生成 + 同步海外），
+# 留一小时余量；取到的永远是当天已发布的数据。
+# 手动触发：Actions 页面 Run workflow，或 gh workflow run refresh-data.yml
+
+name: Refresh MCP data & deploy Worker
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  refresh-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Rebuild data from live endpoints
+        run: node scripts/fetch-data.mjs
+
+      - name: Deploy Worker
+        run: npx --yes wrangler@4 deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Verify endpoint serves palettes
+        run: |
+          sleep 5
+          count=$(curl -fsSL https://paletteget-mcp.y7206062.workers.dev/ \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{console.log(JSON.parse(s).palettes)})")
+          echo "endpoint palettes: $count"
+          test "$count" -gt 0
