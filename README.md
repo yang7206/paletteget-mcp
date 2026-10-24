@@ -67,6 +67,9 @@ The stdio server fetches live data from the public JSON endpoints and caches it 
 | `get_palette` | Full data for one palette: role colors, contrast results, human-written pairing advice |
 | `suggest_palette` | Recommend palettes from keywords in English or Chinese, and say what matched |
 | `get_css_variables` | CSS custom properties for a palette, ready to paste |
+| `check_contrast` | WCAG contrast between any two colors, with both the body-text and large-text verdicts |
+| `suggest_text_color` | Readable text colors for a given background: same-hue tints and shades plus black and white, ranked by contrast |
+| `darken_palette` | Derive a dark-mode version of a light palette with published rules, and the measured contrast of every pair |
 
 Example call and result:
 

@@ -22,9 +22,10 @@
  */
 
 import dataZh from './data/palettes.zh.json';
+import { contrastRatio, wcagLevel, textCandidates, darkVariant } from './color.mjs';
 import dataEn from './data/palettes.en.json';
 
-const SERVER_INFO = { name: 'paletteget-mcp', version: '1.0.0' };
+const SERVER_INFO = { name: 'paletteget-mcp', version: '1.1.0' };
 const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const PLATFORMS = ['app', 'web', 'miniapp'];
 const PLATFORM_LABEL = { app: 'App', web: 'Web', miniapp: 'Mini App' };
@@ -129,6 +130,15 @@ ${colors.map((c) => `  --${c.key}: ${c.hex}; /* ${c.label} */`).join('\n')}
 `;
 }
 
+/* ---------------- 入参规范化 ---------------- */
+
+/** '#abc' | 'abc123' → '#abc123'；非法返回 null */
+function normHex(v) {
+  const h = String(v || '').trim().replace(/^#/, '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  return /^[0-9a-fA-F]{6}$/.test(full) ? `#${full.toLowerCase()}` : null;
+}
+
 /* ---------------- 工具分发 ---------------- */
 
 async function callTool(name, args = {}) {
@@ -208,6 +218,69 @@ async function callTool(name, args = {}) {
     return cssVariables(hit);
   }
 
+  if (name === 'check_contrast') {
+    const fg = normHex(args.foreground);
+    const bg = normHex(args.background);
+    if (!fg || !bg) return '请提供合法的 HEX 色值，例如 foreground="#111827"、background="#ffffff"。';
+    const ratio = contrastRatio(fg, bg);
+    return [
+      `${fg} 压在 ${bg} 上：${ratio.toFixed(2)}:1`,
+      `  正文级（<18px）：${wcagLevel(ratio, 'normal')}（AA 需 4.5，AAA 需 7）`,
+      `  大字级（>=18px 或 14px 加粗）：${wcagLevel(ratio, 'large')}（AA 需 3，AAA 需 4.5）`,
+    ].join('\n');
+  }
+
+  if (name === 'suggest_text_color') {
+    const bg = normHex(args.background);
+    if (!bg) return '请提供一个合法的背景色，例如 background="#1f5f5b"。';
+    const limit = Number(args.limit) > 0 ? Number(args.limit) : 6;
+    const list = textCandidates(bg, limit);
+    const lines = list.map((c) => {
+      const tag = c.recommended ? ' ← 推荐' : '';
+      const kind = c.kind === 'light' ? '同色相浅色' : c.kind === 'dark' ? '同色相深色' : '中性';
+      return `- ${c.hex}  ${c.ratio.toFixed(2)}:1  ${c.level}  （${kind}）${tag}`;
+    });
+    const best = list[0] ? list[0].ratio : 0;
+    const note =
+      best >= 4.5
+        ? '判定按正文级给出；大字号可放宽到 3:1。'
+        : '所有候选都没到 4.5:1，这个背景上只适合大字，或者给文字加一层底色块。';
+    return `背景 ${bg} 的可读文字色（按对比度降序）：\n${lines.join('\n')}\n\n${note}`;
+  }
+
+  if (name === 'darken_palette') {
+    let roles = null;
+    let label = '';
+    if (args.slug) {
+      const slug = String(args.slug).toLowerCase();
+      const hit = PALETTES.find(
+        (p) => p.slug.toLowerCase() === slug && (!args.platform || p.platform === args.platform)
+      );
+      if (!hit) return `没找到 slug 为「${args.slug}」的配色。也可以改用 roles 直接传色值。`;
+      roles = hit.roles;
+      label = `${hit.nameEn}${hit.nameZh && hit.nameZh !== hit.nameEn ? ` / ${hit.nameZh}` : ''}（${hit.platform}）`;
+    } else if (args.roles && typeof args.roles === 'object') {
+      roles = args.roles;
+      label = 'custom roles';
+    }
+    if (!roles) return '请给 slug（取库里配色）或 roles（直接传角色色值对象）。';
+
+    const { roles: dark, checks } = darkVariant(roles);
+    const checkLines = checks.map((c) => `  ${c.key}: ${c.ratio.toFixed(2)}:1 → ${c.level}`);
+    return [
+      `来源：${label}`,
+      '推导规则：背景 L9、卡片 L14、正文 L93、次级文字 L70、描边 L26；结构角色饱和度 ×0.30~0.40 并设上限；品牌色与功能色只提亮到 L55~78。',
+      '',
+      '深色版本 roles：',
+      JSON.stringify(dark, null, 2),
+      '',
+      '实测对比度（textOnBg / textOnSurface 按正文口径 4.5 / 7；primaryOnBg 按非正文元素口径 3 / 4.5）：',
+      ...checkLines,
+      '',
+      '注意：这是按上述规则推导出的结果，不是配色库里的条目。',
+    ].join('\n');
+  }
+
   return { __unknownTool: name };
 }
 
@@ -265,6 +338,48 @@ const TOOLS = [
       required: ['slug'],
     },
   },
+  {
+    name: 'check_contrast',
+    description:
+      '算两个颜色之间的 WCAG 对比度，并同时给出正文级（4.5 / 7）与大字级（3 / 4.5）两套判定。适合在把配色写进代码前先验一遍。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        foreground: { type: 'string', description: '前景色（通常是文字），如 #111827' },
+        background: { type: 'string', description: '背景色，如 #ffffff' },
+      },
+      required: ['foreground', 'background'],
+    },
+  },
+  {
+    name: 'suggest_text_color',
+    description:
+      '给一个背景色，返回一组可读的文字色候选（同色相的极浅与极深版 + 纯黑白参照），按对比度降序，标出推荐项与 AA / AAA 判定。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        background: { type: 'string', description: '背景色，如 #1f5f5b' },
+        limit: { type: 'number', description: '最多返回几个，默认 6' },
+      },
+      required: ['background'],
+    },
+  },
+  {
+    name: 'darken_palette',
+    description:
+      '把一套浅色配色推导成深色版本：按固定规则重排明度与饱和度，并返回每对颜色的实测对比度。可用 slug 取库里配色，也可直接传 roles。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: '配色 slug，如 jing-hu-lan' },
+        platform: { type: 'string', enum: PLATFORMS },
+        roles: {
+          type: 'object',
+          description: '直接传角色色值，如 {"bg":"#faf8f2","text":"#2b2b2b","primary":"#1989ea"}；与 slug 二选一',
+        },
+      },
+    },
+  },
 ];
 
 /* ---------------- JSON-RPC / Streamable HTTP ---------------- */
@@ -304,7 +419,9 @@ async function handleRpcMessage(msg) {
       instructions:
         'PaletteGet is a library of WCAG-checked color palettes for App / Web / Mini App UIs. ' +
         'Use suggest_palette for natural-language recommendations, get_palette for exact role hex values, ' +
-        'get_css_variables for ready-to-paste CSS custom properties.',
+        'get_css_variables for ready-to-paste CSS custom properties, ' +
+        'check_contrast for a WCAG verdict on any two colors, suggest_text_color for readable text on a known background, ' +
+        'and darken_palette to derive a dark-mode version of a light palette.',
     });
   }
 
