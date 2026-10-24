@@ -26,7 +26,7 @@ import { contrastRatio, wcagLevel, textCandidates, darkVariant } from './color.m
 import { webSnippets, mobileSnippets, SNIPPET_TARGETS } from './snippets.mjs';
 import dataEn from './data/palettes.en.json';
 
-const SERVER_INFO = { name: 'paletteget-mcp', version: '1.1.0' };
+const SERVER_INFO = { name: 'paletteget-mcp', version: '1.2.0' };
 const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const PLATFORMS = ['app', 'web', 'miniapp'];
 const PLATFORM_LABEL = { app: 'App', web: 'Web', miniapp: 'Mini App' };
