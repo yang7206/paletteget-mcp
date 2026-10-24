@@ -87,3 +87,12 @@ export function mobileSnippets({ name, platform, colors, contrast }) {
 }
 
 export const SNIPPET_TARGETS = ['android', 'ios', 'flutter', 'wxss', 'css', 'scss', 'tailwind'];
+
+/** 色阶导出片段（对应站点 src/lib/scale.mjs，parity 逐字比对） */
+export function scaleSnippets({ scale, name = 'brand' }) {
+  const css = `:root {\n${scale.map((x) => `  --${name}-${x.step}: ${x.hex};`).join('\n')}\n}`;
+  const tailwind = `module.exports = {\n  theme: {\n    extend: {\n      colors: {\n        ${name}: {\n${scale
+    .map((x) => `          ${x.step}: '${x.hex}',`)
+    .join('\n')}\n        },\n      },\n    },\n  },\n};`;
+  return { css, tailwind };
+}

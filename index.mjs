@@ -24,8 +24,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { contrastRatio, wcagLevel, textCandidates, darkVariant } from './color.mjs';
-import { webSnippets, mobileSnippets, SNIPPET_TARGETS } from './snippets.mjs';
+import { contrastRatio, wcagLevel, textCandidates, darkVariant, colorScale } from './color.mjs';
+import { webSnippets, mobileSnippets, scaleSnippets, SNIPPET_TARGETS } from './snippets.mjs';
 
 // 可选代理：Node 内置 fetch 不读 HTTP_PROXY，需要显式装 ProxyAgent。
 // 国内网络环境下把 PALETTEGET_PROXY 指向本地代理即可（不设则直连）。
@@ -242,6 +242,18 @@ const TOOLS = [
     },
   },
   {
+    name: 'get_color_scale',
+    description: '从一个基准色生成 50 到 900 的 10 级色阶（500 等于基准色本身），每阶附白字与黑字的对比度；format 可选 list / json / css / tailwind。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        color: { type: 'string', description: '基准色，如 #4c8df6' },
+        format: { type: 'string', enum: ['list', 'json', 'css', 'tailwind'] },
+      },
+      required: ['color'],
+    },
+  },
+  {
     name: 'darken_palette',
     description:
       '把一套浅色配色推导成深色版本，并返回每对颜色的实测对比度。可用 slug 取库里配色，也可直接传 roles。',
@@ -428,6 +440,25 @@ async function callTool(name, args = {}) {
     const name = lang === 'en' ? hit.nameEn : hit.nameZh || hit.nameEn;
     const all = { ...webSnippets({ name, colors, lang }), ...mobileSnippets({ name, platform: label, colors, contrast: hit.contrast }) };
     return all[target];
+  }
+
+  if (name === 'get_color_scale') {
+    const base = normHex(args.color);
+    if (!base) return '请提供一个合法的基准色，例如 color="#4c8df6"。';
+
+    const scale = colorScale(base);
+    const format = String(args.format || 'list').toLowerCase();
+    if (format === 'css' || format === 'tailwind') return scaleSnippets({ scale })[format];
+    if (format === 'json') return JSON.stringify({ base, scale }, null, 2);
+
+    return [
+      `基准色 ${base} 的 50 到 900 色阶（500 即基准色本身）：`,
+      ...scale.map(
+        (s) => `- ${s.step}: ${s.hex}  白字 ${s.onWhite.toFixed(2)}:1（${s.levelWhite}）  黑字 ${s.onBlack.toFixed(2)}:1（${s.levelBlack}）`
+      ),
+      '',
+      '对比度按正文口径（4.5 / 7）判定。要可粘贴代码可传 format="css" 或 "tailwind"。',
+    ].join('\n');
   }
 
   return `未知工具：${name}`;

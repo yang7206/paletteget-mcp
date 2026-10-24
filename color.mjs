@@ -185,3 +185,32 @@ export function bgLuminance(roles = {}) {
   const bg = pick(roles, ['bg']);
   return bg ? relativeLuminance(bg) : null;
 }
+
+/* ---------------- 色阶（对应站点 /tools/shades/） ---------------- */
+
+export const SCALE_STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
+
+const CURVE_L = { 50: 97, 100: 94, 200: 86, 300: 76, 400: 66, 500: 56, 600: 48, 700: 40, 800: 32, 900: 24 };
+const CURVE_S = { 50: 0.55, 100: 0.64, 200: 0.74, 300: 0.84, 400: 0.94, 500: 1, 600: 1, 700: 0.98, 800: 0.95, 900: 0.9 };
+
+export function colorScale(baseHex) {
+  const base = String(baseHex).toLowerCase();
+  const { h, s, l } = hexToHsl(base);
+  const delta = l - CURVE_L[500];
+
+  return SCALE_STEPS.map((step) => {
+    const light = Math.max(3, Math.min(97, CURVE_L[step] + delta));
+    const sat = Math.max(0, Math.min(100, s * CURVE_S[step]));
+    const hex = step === 500 ? base : hslToHex({ h, s: sat, l: light });
+    const onWhite = contrastRatio(hex, '#ffffff');
+    const onBlack = contrastRatio(hex, '#000000');
+    return {
+      step,
+      hex,
+      onWhite,
+      onBlack,
+      levelWhite: wcagLevel(onWhite, 'normal'),
+      levelBlack: wcagLevel(onBlack, 'normal'),
+    };
+  });
+}

@@ -71,6 +71,7 @@ The stdio server fetches live data from the public JSON endpoints and caches it 
 | `suggest_text_color` | Readable text colors for a given background: same-hue tints and shades plus black and white, ranked by contrast |
 | `darken_palette` | Derive a dark-mode version of a light palette with published rules, and the measured contrast of every pair |
 | `get_platform_snippet` | Paste-ready code for one palette: Android `colors.xml`, iOS `UIColor`, Flutter `Color`, mini program `wxss`, CSS, SCSS or Tailwind |
+| `get_color_scale` | Expand one base color into a 50 to 900 scale, with white and black contrast per step; JSON, CSS or Tailwind output |
 
 Example call and result:
 

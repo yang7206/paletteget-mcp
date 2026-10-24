@@ -22,11 +22,11 @@
  */
 
 import dataZh from './data/palettes.zh.json';
-import { contrastRatio, wcagLevel, textCandidates, darkVariant } from './color.mjs';
-import { webSnippets, mobileSnippets, SNIPPET_TARGETS } from './snippets.mjs';
+import { contrastRatio, wcagLevel, textCandidates, darkVariant, colorScale } from './color.mjs';
+import { webSnippets, mobileSnippets, scaleSnippets, SNIPPET_TARGETS } from './snippets.mjs';
 import dataEn from './data/palettes.en.json';
 
-const SERVER_INFO = { name: 'paletteget-mcp', version: '1.2.0' };
+const SERVER_INFO = { name: 'paletteget-mcp', version: '1.3.0' };
 const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const PLATFORMS = ['app', 'web', 'miniapp'];
 const PLATFORM_LABEL = { app: 'App', web: 'Web', miniapp: 'Mini App' };
@@ -307,6 +307,31 @@ async function callTool(name, args = {}) {
     return all[target];
   }
 
+  if (name === 'get_color_scale') {
+    const base = normHex(args.color);
+    if (!base) return '请提供一个合法的基准色，例如 color="#4c8df6"。';
+
+    const scale = colorScale(base);
+    const format = String(args.format || 'list').toLowerCase();
+
+    if (format === 'css' || format === 'tailwind') {
+      return scaleSnippets({ scale })[format];
+    }
+    if (format === 'json') {
+      return JSON.stringify({ base, scale }, null, 2);
+    }
+
+    const lines = scale.map(
+      (s) => `- ${s.step}: ${s.hex}  白字 ${s.onWhite.toFixed(2)}:1（${s.levelWhite}）  黑字 ${s.onBlack.toFixed(2)}:1（${s.levelBlack}）`
+    );
+    return [
+      `基准色 ${base} 的 50 到 900 色阶（500 即基准色本身）：`,
+      ...lines,
+      '',
+      '对比度按正文口径（4.5 / 7）判定。要可粘贴代码可传 format="css" 或 "tailwind"。',
+    ].join('\n');
+  }
+
   return { __unknownTool: name };
 }
 
@@ -410,6 +435,19 @@ const TOOLS = [
     },
   },
   {
+    name: 'get_color_scale',
+    description:
+      '从一个基准色生成 50 到 900 的 10 级色阶（500 等于基准色本身），每阶附白字与黑字的实测对比度；format 可取 list / json / css / tailwind。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        color: { type: 'string', description: '基准色，如 #4c8df6' },
+        format: { type: 'string', enum: ['list', 'json', 'css', 'tailwind'], description: '输出形态，默认 list' },
+      },
+      required: ['color'],
+    },
+  },
+  {
     name: 'darken_palette',
     description:
       '把一套浅色配色推导成深色版本：按固定规则重排明度与饱和度，并返回每对颜色的实测对比度。可用 slug 取库里配色，也可直接传 roles。',
@@ -467,7 +505,8 @@ async function handleRpcMessage(msg) {
         'get_css_variables for ready-to-paste CSS custom properties, ' +
         'check_contrast for a WCAG verdict on any two colors, suggest_text_color for readable text on a known background, ' +
         'darken_palette to derive a dark-mode version of a light palette, and ' +
-        'get_platform_snippet for paste-ready Android, iOS, Flutter, mini program, CSS, SCSS or Tailwind output.',
+        'get_platform_snippet for paste-ready Android, iOS, Flutter, mini program, CSS, SCSS or Tailwind output, ' +
+        'and get_color_scale to expand one brand color into a 50 to 900 scale.',
     });
   }
 

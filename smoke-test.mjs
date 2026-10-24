@@ -5,7 +5,7 @@
  *   cd mcp && npm install && npm run smoke
  *
  * 直接按 MCP 的 stdio 协议（换行分隔的 JSON-RPC）跟服务端对话，
- * 把 8 个工具全跑一遍并断言输出，不需要真实 MCP 客户端。
+ * 把 9 个工具全跑一遍并断言输出，不需要真实 MCP 客户端。
  *
  * 数据源：默认用**本地构建产物**起一个夹具服务（把 dist/ 里的中英数据集
  * 按线上路径结构喂给服务端，并把 payload 里的绝对地址改写成 localhost），
@@ -140,7 +140,7 @@ try {
 
   console.log('=== 2. 工具清单 ===');
   const tools = (await rpc('tools/list', {})).result?.tools ?? [];
-  check('返回 8 个工具', tools.length === 8, tools.map((t) => t.name).join(', '));
+  check('返回 9 个工具', tools.length === 9, tools.map((t) => t.name).join(', '));
   for (const want of [
     'list_palettes',
     'get_palette',
@@ -149,6 +149,7 @@ try {
     'check_contrast',
     'suggest_text_color',
     'get_platform_snippet',
+    'get_color_scale',
     'darken_palette',
   ]) {
     check(`含工具 ${want}`, tools.map((t) => t.name).includes(want));
@@ -200,7 +201,25 @@ try {
   }));
   check('非法 target 有提示', snipBad.includes('target 只支持'), snipBad.slice(0, 40));
 
-  console.log('=== 9. check_contrast ===');
+  console.log('=== 9. get_color_scale ===');
+  const scaleTxt = textOf(await rpc('tools/call', {
+    name: 'get_color_scale',
+    arguments: { color: '#4c8df6' },
+  }));
+  check('列出 50 到 900 共 10 阶', ['50:', '100:', '500:', '900:'].every((k) => scaleTxt.includes(k)), scaleTxt.split('\n')[1]);
+  check('500 阶就是基准色本身', /- 500: #4c8df6/.test(scaleTxt));
+  const scaleCss = textOf(await rpc('tools/call', {
+    name: 'get_color_scale',
+    arguments: { color: '#4c8df6', format: 'css' },
+  }));
+  check('format=css 输出 10 条变量', (scaleCss.match(/--brand-\d+/g) || []).length === 10);
+  const scaleBad = textOf(await rpc('tools/call', {
+    name: 'get_color_scale',
+    arguments: { color: 'nope' },
+  }));
+  check('非法色值有提示', scaleBad.includes('合法的基准色'), scaleBad.slice(0, 30));
+
+  console.log('=== 10. check_contrast ===');
   const cc = textOf(await rpc('tools/call', {
     name: 'check_contrast',
     arguments: { foreground: '#e8ecf4', background: '#12161f' },
@@ -208,7 +227,7 @@ try {
   check('算出已知对比度 15.29:1', cc.includes('15.29:1'), cc.split('\n')[0]);
   check('同时给正文级与大字级判定', cc.includes('正文级') && cc.includes('大字级'));
 
-  console.log('=== 10. suggest_text_color ===');
+  console.log('=== 11. suggest_text_color ===');
   const stc = textOf(await rpc('tools/call', {
     name: 'suggest_text_color',
     arguments: { background: '#1f5f5b', limit: 4 },
@@ -216,7 +235,7 @@ try {
   check('给出候选并标推荐', stc.includes('推荐'), stc.split('\n')[1] || stc.slice(0, 40));
   check('候选带 X.XX:1 形式对比度', /- #[0-9a-f]{6}\s+\d+\.\d{2}:1/.test(stc));
 
-  console.log('=== 11. darken_palette ===');
+  console.log('=== 12. darken_palette ===');
   const dp = textOf(await rpc('tools/call', {
     name: 'darken_palette',
     arguments: { slug: firstSlug, platform: 'web' },
@@ -225,7 +244,7 @@ try {
   check('输出实测对比度', dp.includes('实测对比度') && /\d+\.\d{2}:1/.test(dp));
   check('声明这是推导而非库条目', dp.includes('不是配色库里的条目'));
 
-  console.log('=== 12. 错误处理 ===');
+  console.log('=== 13. 错误处理 ===');
   const bad = textOf(await rpc('tools/call', { name: 'get_palette', arguments: { slug: 'no-such-slug' } }));
   check('不存在的 slug 有友好提示', bad.includes('没找到'), bad.slice(0, 40));
 
