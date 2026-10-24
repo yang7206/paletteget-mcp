@@ -23,6 +23,7 @@
 
 import dataZh from './data/palettes.zh.json';
 import { contrastRatio, wcagLevel, textCandidates, darkVariant } from './color.mjs';
+import { webSnippets, mobileSnippets, SNIPPET_TARGETS } from './snippets.mjs';
 import dataEn from './data/palettes.en.json';
 
 const SERVER_INFO = { name: 'paletteget-mcp', version: '1.1.0' };
@@ -281,6 +282,31 @@ async function callTool(name, args = {}) {
     ].join('\n');
   }
 
+  if (name === 'get_platform_snippet') {
+    const slug = String(args.slug || '').toLowerCase();
+    const hit = PALETTES.find(
+      (p) => p.slug.toLowerCase() === slug && (!args.platform || p.platform === args.platform)
+    );
+    if (!hit) return `没找到 slug 为「${args.slug}」的配色。`;
+
+    const target = String(args.target || '').toLowerCase();
+    if (!SNIPPET_TARGETS.includes(target)) {
+      return `target 只支持：${SNIPPET_TARGETS.join(' / ')}。`;
+    }
+
+    const lang = args.lang === 'en' ? 'en' : 'zh';
+    const label = PLATFORM_LABEL[hit.platform] || hit.platform;
+    // 角色文案取该语言的 colors 数组（端点里带 label），缺失时退回 key
+    const rawColors = (lang === 'en' ? hit.colorsEn : hit.colorsZh) || [];
+    const colors = rawColors.length
+      ? rawColors.map((c) => ({ key: c.key, label: c.label, hex: c.hex }))
+      : Object.entries(hit.roles || {}).map(([key, hex]) => ({ key, label: key, hex }));
+
+    const name = lang === 'en' ? hit.nameEn : hit.nameZh || hit.nameEn;
+    const all = { ...webSnippets({ name, colors, lang }), ...mobileSnippets({ name, platform: label, colors, contrast: hit.contrast }) };
+    return all[target];
+  }
+
   return { __unknownTool: name };
 }
 
@@ -365,6 +391,25 @@ const TOOLS = [
     },
   },
   {
+    name: 'get_platform_snippet',
+    description:
+      '取一套配色的可直接粘贴代码片段，按目标平台生成：Android colors.xml、iOS UIColor、Flutter Color、小程序 wxss、CSS 变量、SCSS 变量、Tailwind 配置。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: '配色 slug，如 mo-lan-ye' },
+        platform: { type: 'string', enum: PLATFORMS },
+        target: {
+          type: 'string',
+          enum: SNIPPET_TARGETS,
+          description: '目标格式：android / ios / flutter / wxss / css / scss / tailwind',
+        },
+        lang: { type: 'string', enum: ['zh', 'en'], description: '角色文案语言，默认 zh' },
+      },
+      required: ['slug', 'target'],
+    },
+  },
+  {
     name: 'darken_palette',
     description:
       '把一套浅色配色推导成深色版本：按固定规则重排明度与饱和度，并返回每对颜色的实测对比度。可用 slug 取库里配色，也可直接传 roles。',
@@ -421,7 +466,8 @@ async function handleRpcMessage(msg) {
         'Use suggest_palette for natural-language recommendations, get_palette for exact role hex values, ' +
         'get_css_variables for ready-to-paste CSS custom properties, ' +
         'check_contrast for a WCAG verdict on any two colors, suggest_text_color for readable text on a known background, ' +
-        'and darken_palette to derive a dark-mode version of a light palette.',
+        'darken_palette to derive a dark-mode version of a light palette, and ' +
+        'get_platform_snippet for paste-ready Android, iOS, Flutter, mini program, CSS, SCSS or Tailwind output.',
     });
   }
 

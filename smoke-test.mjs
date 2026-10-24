@@ -5,7 +5,7 @@
  *   cd mcp && npm install && npm run smoke
  *
  * 直接按 MCP 的 stdio 协议（换行分隔的 JSON-RPC）跟服务端对话，
- * 把 7 个工具全跑一遍并断言输出，不需要真实 MCP 客户端。
+ * 把 8 个工具全跑一遍并断言输出，不需要真实 MCP 客户端。
  *
  * 数据源：默认用**本地构建产物**起一个夹具服务（把 dist/ 里的中英数据集
  * 按线上路径结构喂给服务端，并把 payload 里的绝对地址改写成 localhost），
@@ -140,7 +140,7 @@ try {
 
   console.log('=== 2. 工具清单 ===');
   const tools = (await rpc('tools/list', {})).result?.tools ?? [];
-  check('返回 7 个工具', tools.length === 7, tools.map((t) => t.name).join(', '));
+  check('返回 8 个工具', tools.length === 8, tools.map((t) => t.name).join(', '));
   for (const want of [
     'list_palettes',
     'get_palette',
@@ -148,6 +148,7 @@ try {
     'get_css_variables',
     'check_contrast',
     'suggest_text_color',
+    'get_platform_snippet',
     'darken_palette',
   ]) {
     check(`含工具 ${want}`, tools.map((t) => t.name).includes(want));
@@ -177,7 +178,29 @@ try {
   check('返回 CSS 变量', css.includes('--color-'),
     (css.split('\n').find((l) => l.includes('--color-')) || '').trim());
 
-  console.log('=== 8. check_contrast ===');
+  console.log('=== 8. get_platform_snippet ===');
+  const snipAndroid = textOf(await rpc('tools/call', {
+    name: 'get_platform_snippet',
+    arguments: { slug: firstSlug, platform: 'web', target: 'android' },
+  }));
+  check('Android 片段是合法 XML 头', snipAndroid.startsWith('<?xml'), snipAndroid.split('\n')[0]);
+  check('Android 资源名用 color_ 前缀 + snake_case',
+    /<color name="color_[a-z0-9_]+">#[0-9A-F]{6}<\/color>/.test(snipAndroid),
+    (snipAndroid.split('\n').find((l) => l.includes('<color ')) || '').trim());
+  const snipWxss = textOf(await rpc('tools/call', {
+    name: 'get_platform_snippet',
+    arguments: { slug: firstSlug, platform: 'web', target: 'wxss' },
+  }));
+  check('小程序片段是 page{} 里的 kebab-case 变量',
+    snipWxss.includes('page {') && /--color-[a-z0-9-]+: #[0-9a-f]{6}/.test(snipWxss),
+    (snipWxss.split('\n').find((l) => l.includes('--color')) || '').trim());
+  const snipBad = textOf(await rpc('tools/call', {
+    name: 'get_platform_snippet',
+    arguments: { slug: firstSlug, target: 'nope' },
+  }));
+  check('非法 target 有提示', snipBad.includes('target 只支持'), snipBad.slice(0, 40));
+
+  console.log('=== 9. check_contrast ===');
   const cc = textOf(await rpc('tools/call', {
     name: 'check_contrast',
     arguments: { foreground: '#e8ecf4', background: '#12161f' },
@@ -185,7 +208,7 @@ try {
   check('算出已知对比度 15.29:1', cc.includes('15.29:1'), cc.split('\n')[0]);
   check('同时给正文级与大字级判定', cc.includes('正文级') && cc.includes('大字级'));
 
-  console.log('=== 9. suggest_text_color ===');
+  console.log('=== 10. suggest_text_color ===');
   const stc = textOf(await rpc('tools/call', {
     name: 'suggest_text_color',
     arguments: { background: '#1f5f5b', limit: 4 },
@@ -193,7 +216,7 @@ try {
   check('给出候选并标推荐', stc.includes('推荐'), stc.split('\n')[1] || stc.slice(0, 40));
   check('候选带 X.XX:1 形式对比度', /- #[0-9a-f]{6}\s+\d+\.\d{2}:1/.test(stc));
 
-  console.log('=== 10. darken_palette ===');
+  console.log('=== 11. darken_palette ===');
   const dp = textOf(await rpc('tools/call', {
     name: 'darken_palette',
     arguments: { slug: firstSlug, platform: 'web' },
@@ -202,7 +225,7 @@ try {
   check('输出实测对比度', dp.includes('实测对比度') && /\d+\.\d{2}:1/.test(dp));
   check('声明这是推导而非库条目', dp.includes('不是配色库里的条目'));
 
-  console.log('=== 11. 错误处理 ===');
+  console.log('=== 12. 错误处理 ===');
   const bad = textOf(await rpc('tools/call', { name: 'get_palette', arguments: { slug: 'no-such-slug' } }));
   check('不存在的 slug 有友好提示', bad.includes('没找到'), bad.slice(0, 40));
 

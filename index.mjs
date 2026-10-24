@@ -25,6 +25,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { contrastRatio, wcagLevel, textCandidates, darkVariant } from './color.mjs';
+import { webSnippets, mobileSnippets, SNIPPET_TARGETS } from './snippets.mjs';
 
 // 可选代理：Node 内置 fetch 不读 HTTP_PROXY，需要显式装 ProxyAgent。
 // 国内网络环境下把 PALETTEGET_PROXY 指向本地代理即可（不设则直连）。
@@ -226,6 +227,21 @@ const TOOLS = [
     },
   },
   {
+    name: 'get_platform_snippet',
+    description:
+      '取一套配色的可直接粘贴代码片段：Android colors.xml / iOS UIColor / Flutter Color / 小程序 wxss / CSS / SCSS / Tailwind。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: '配色 slug' },
+        platform: { type: 'string', enum: PLATFORMS },
+        target: { type: 'string', enum: SNIPPET_TARGETS },
+        lang: { type: 'string', enum: ['zh', 'en'], description: '角色文案语言，默认 zh' },
+      },
+      required: ['slug', 'target'],
+    },
+  },
+  {
     name: 'darken_palette',
     description:
       '把一套浅色配色推导成深色版本，并返回每对颜色的实测对比度。可用 slug 取库里配色，也可直接传 roles。',
@@ -389,6 +405,29 @@ async function callTool(name, args = {}) {
       '',
       '注意：这是按上述规则推导出的结果，不是配色库里的条目。',
     ].join('\n');
+  }
+
+  if (name === 'get_platform_snippet') {
+    const palettes = await loadPalettes();
+    const slug = String(args.slug || '').toLowerCase();
+    const hit = palettes.find(
+      (p) => p.slug.toLowerCase() === slug && (!args.platform || p.platform === args.platform)
+    );
+    if (!hit) return `没找到 slug 为「${args.slug}」的配色。`;
+
+    const target = String(args.target || '').toLowerCase();
+    if (!SNIPPET_TARGETS.includes(target)) return `target 只支持：${SNIPPET_TARGETS.join(' / ')}。`;
+
+    const lang = args.lang === 'en' ? 'en' : 'zh';
+    const label = { app: 'App', web: 'Web', miniapp: 'Mini App' }[hit.platform] || hit.platform;
+    const rawColors = (lang === 'en' ? hit.colorsEn : hit.colorsZh) || [];
+    const colors = rawColors.length
+      ? rawColors.map((c) => ({ key: c.key, label: c.label, hex: c.hex }))
+      : Object.entries(hit.roles || {}).map(([key, hex]) => ({ key, label: key, hex }));
+
+    const name = lang === 'en' ? hit.nameEn : hit.nameZh || hit.nameEn;
+    const all = { ...webSnippets({ name, colors, lang }), ...mobileSnippets({ name, platform: label, colors, contrast: hit.contrast }) };
+    return all[target];
   }
 
   return `未知工具：${name}`;

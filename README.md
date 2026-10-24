@@ -70,6 +70,7 @@ The stdio server fetches live data from the public JSON endpoints and caches it 
 | `check_contrast` | WCAG contrast between any two colors, with both the body-text and large-text verdicts |
 | `suggest_text_color` | Readable text colors for a given background: same-hue tints and shades plus black and white, ranked by contrast |
 | `darken_palette` | Derive a dark-mode version of a light palette with published rules, and the measured contrast of every pair |
+| `get_platform_snippet` | Paste-ready code for one palette: Android `colors.xml`, iOS `UIColor`, Flutter `Color`, mini program `wxss`, CSS, SCSS or Tailwind |
 
 Example call and result:
 
