@@ -196,10 +196,13 @@ const CURVE_S = { 50: 0.55, 100: 0.64, 200: 0.74, 300: 0.84, 400: 0.94, 500: 1, 
 export function colorScale(baseHex) {
   const base = String(baseHex).toLowerCase();
   const { h, s, l } = hexToHsl(base);
-  const delta = l - CURVE_L[500];
+  const anchor = CURVE_L[500];
+  const kUp = Math.max(0.35, Math.min(1, (97 - l) / (CURVE_L[50] - anchor)));
+  const kDown = Math.max(0.35, Math.min(1, (l - 3) / (anchor - CURVE_L[900])));
 
   return SCALE_STEPS.map((step) => {
-    const light = Math.max(3, Math.min(97, CURVE_L[step] + delta));
+    const dist = CURVE_L[step] - anchor;
+    const light = Math.max(3, Math.min(97, l + dist * (dist >= 0 ? kUp : kDown)));
     const sat = Math.max(0, Math.min(100, s * CURVE_S[step]));
     const hex = step === 500 ? base : hslToHex({ h, s: sat, l: light });
     const onWhite = contrastRatio(hex, '#ffffff');
