@@ -106,18 +106,21 @@ export function textCandidates(bgHex, limit = 9) {
     out.push({ hex: key, ratio, level: wcagLevel(ratio, 'normal'), kind, source, recommended: false });
   };
 
+  // 中性参照先入列，理由同站点实现：否则白色会被 tint 抢先占位，推荐逻辑失效
+  push('#ffffff', 'neutral', 'white');
+  push('#000000', 'neutral', 'black');
+
   const lightSat = Math.min(40, s * 0.55);
   for (const l of [100, 97, 93, 88]) push(hslToHex({ h, s: lightSat, l }), 'light', 'tint');
 
   const darkSat = Math.min(55, s * 0.8);
   for (const l of [22, 15, 8, 3]) push(hslToHex({ h, s: darkSat, l }), 'dark', 'shade');
 
-  push('#ffffff', 'neutral', 'white');
-  push('#000000', 'neutral', 'black');
-
   out.sort((a, b) => b.ratio - a.ratio);
+  // 与站点 src/lib/theme.mjs 同一规则：优先同色相候选，纯黑白只作参照
+  const bestTinted = out.find((x) => x.kind !== 'neutral' && x.ratio >= 4.5);
   const firstAa = out.find((x) => x.ratio >= 4.5);
-  (firstAa || out[0]).recommended = true;
+  (bestTinted || firstAa || out[0]).recommended = true;
   return out.slice(0, limit);
 }
 
