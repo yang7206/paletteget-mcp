@@ -2,11 +2,11 @@
 
 <p>
   <a href="https://paletteget.com"><img alt="site" src="https://img.shields.io/badge/site-paletteget.com-2563eb"></a>
-  <img alt="palettes" src="https://img.shields.io/badge/palettes-90-0e9aa7">
+  <img alt="palettes" src="https://img.shields.io/badge/palettes-100-0e9aa7">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-111827">
 </p>
 
-An MCP server for the [PaletteGet](https://paletteget.com) color palette library: 90 palettes
+An MCP server for the [PaletteGet](https://paletteget.com) color palette library: 100 palettes
 across App, Web and Mini App UIs, each organized into 10 design roles and checked against WCAG
 contrast requirements.
 
@@ -39,6 +39,27 @@ The hosted server embeds the dataset at deploy time, so it never depends on the 
 reachable and answers in a few milliseconds.
 
 ## Or run it locally (stdio)
+
+### From npm, no clone
+
+```bash
+npx -y paletteget-mcp
+```
+
+```json
+{
+  "mcpServers": {
+    "paletteget": {
+      "command": "npx",
+      "args": ["-y", "paletteget-mcp"]
+    }
+  }
+}
+```
+
+Behind a proxy, set `PALETTEGET_PROXY=http://127.0.0.1:7897` in the server's `env` block.
+
+### From source
 
 ```bash
 git clone https://github.com/yang7206/paletteget-mcp.git

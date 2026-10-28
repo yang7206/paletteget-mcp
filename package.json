@@ -8,22 +8,28 @@
   },
   "files": [
     "index.mjs",
+    "color.mjs",
+    "snippets.mjs",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "start": "node index.mjs",
     "smoke": "node smoke-test.mjs",
+    "check:pack": "node scripts/check-pack.mjs",
+    "prepublishOnly": "npm run check:pack && npm run smoke",
     "data": "node --import ./alias-loader.mjs build-data.mjs",
     "worker:dev": "wrangler dev",
     "worker:deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.1"
+  },
+  "optionalDependencies": {
     "undici": "^7.0.0"
   },
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20"
   },
   "keywords": [
     "mcp",

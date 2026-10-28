@@ -21,6 +21,7 @@
  *   PALETTEGET_PROXY     走代理访问（如 http://127.0.0.1:7897）；
  *                        也接受标准的 HTTPS_PROXY / https_proxy
  */
+import { readFileSync } from 'node:fs';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -466,8 +467,11 @@ async function callTool(name, args = {}) {
 
 /* ---------------- 启动 ---------------- */
 
+// 版本号只认 package.json 一处：以前这里硬编码 '0.1.0'，发版时必然与 package.json 漂移
+const VERSION = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
+
 const server = new Server(
-  { name: 'paletteget', version: '0.1.0' },
+  { name: 'paletteget', version: VERSION },
   { capabilities: { tools: {} } }
 );
 
