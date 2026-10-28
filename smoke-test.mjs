@@ -19,6 +19,9 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
+// 国内构建的产物结构：中文在根、英文在 /en/
+const zhFile = resolve(here, '../dist/api/index.json');
+const enFile = resolve(here, '../dist/en/api/index.json');
 
 /* ---------------- 1. 准备数据源 ---------------- */
 
@@ -27,14 +30,22 @@ let apiZh = process.env.PALETTEGET_API_ZH;
 let fixture = null;
 
 if (!apiEn) {
-  // 国内构建的产物结构：中文在根、英文在 /en/
-  const zhFile = resolve(here, '../dist/api/index.json');
-  const enFile = resolve(here, '../dist/en/api/index.json');
+  // 没有构建产物时（独立仓库、npm 包、CI）退回线上端点：
+  // 断言照样跑得起来，否则在独立仓库里 `npm run smoke` 会直接失败（2026-10-28 实测）
   if (!existsSync(zhFile) || !existsSync(enFile)) {
-    console.error('❌ 没找到构建产物。先跑 `npm run build`，或用 PALETTEGET_API 指向线上站点。');
-    process.exit(1);
+    apiEn = 'https://paletteget.com/api/index.json';
+    apiZh = 'https://paletteget.com/zh/api/index.json';
+    console.log('没找到 ../dist 构建产物，改用线上端点做数据源（需要网络；国内请设 PALETTEGET_PROXY）\n');
+  } else {
+    apiEn = '__fixture__';
   }
+}
 
+if (apiEn && apiEn !== '__fixture__') {
+  console.log(`使用指定数据源：${apiEn}\n`);
+}
+
+if (apiEn === '__fixture__') {
   const port = 8787 + Math.floor(Math.random() * 200);
   const origin = `http://127.0.0.1:${port}`;
   // 构建产物里的绝对地址带着挂载前缀（/palette）与占位域名，这里改写成夹具地址
@@ -76,8 +87,6 @@ if (!apiEn) {
   apiEn = `${origin}/api/index.json`;
   apiZh = `${origin}/zh/api/index.json`;
   console.log(`夹具数据源已启动：${origin}（英文 /api、中文 /zh/api）\n`);
-} else {
-  console.log(`使用指定数据源：${apiEn}\n`);
 }
 
 /* ---------------- 2. 启动服务端 ---------------- */
